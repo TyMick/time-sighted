@@ -1,0 +1,45 @@
+name: Clean up PR preview
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove PR preview from gh-pages
+        run: |
+          PR_DIR="pr-${{ github.event.pull_request.number }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin
+
+          if ! git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            echo "No gh-pages branch, nothing to clean up"
+            exit 0
+          fi
+
+          git checkout -b local-gh-pages origin/gh-pages
+
+          if [ ! -d "$PR_DIR" ]; then
+            echo "No preview directory found for PR #${{ github.event.pull_request.number }}"
+            exit 0
+          fi
+
+          git rm -rf "$PR_DIR/"
+          git commit -m "Remove PR #${{ github.event.pull_request.number }} preview"
+          git push origin local-gh-pages:gh-pages
