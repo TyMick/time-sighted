@@ -240,7 +240,7 @@
     word-break: break-word;
   }
 
-  .delete-btn {
+  .reuse-btn, .delete-btn {
     background: rgba(0, 0, 0, 0.06);
     border: none;
     border-radius: 6px;
@@ -256,6 +256,8 @@
     justify-content: center;
     transition: background 0.15s, color 0.15s;
   }
+  .reuse-btn:hover { background: rgba(0, 0, 0, 0.1); color: var(--text); }
+  .reuse-btn:active { background: var(--accent-dim); color: var(--accent); }
   .delete-btn:hover { background: rgba(0, 0, 0, 0.1); color: var(--text); }
   .delete-btn:active { background: rgba(204, 51, 51, 0.12); color: var(--danger); }
 
@@ -399,6 +401,7 @@ function render() {
         <div class="entry-time">${formatTime(entry.ts)}${durationHtml}</div>
         <div class="entry-text">${escHtml(entry.text)}</div>
       </div>
+      <button class="reuse-btn" onclick="reuseEntry('${entry.id}')" title="Fill in memo">⤴</button>
       <button class="delete-btn" onclick="deleteEntry('${entry.id}')" title="Delete">×</button>
     `;
     wrap.appendChild(el);
@@ -432,6 +435,17 @@ function deleteEntry(id) {
   entries = entries.filter(e => e.id !== id);
   save();
   render();
+}
+
+function reuseEntry(id) {
+  const entry = entries.find(e => e.id === id);
+  if (!entry) return;
+  const input = document.getElementById('task-input');
+  input.value = entry.text;
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  document.getElementById('timeline').scrollTop = 0;
+  input.focus();
 }
 
 function clearAll() {
