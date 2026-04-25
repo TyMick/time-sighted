@@ -27,7 +27,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          cp index.html /tmp/index.html
+          cp index.html style.css script.js /tmp/
 
           git fetch origin
 
@@ -39,7 +39,7 @@ jobs:
           fi
 
           mkdir -p "$PR_DIR"
-          cp /tmp/index.html "$PR_DIR/index.html"
+          cp /tmp/index.html /tmp/style.css /tmp/script.js "$PR_DIR/"
           git add "$PR_DIR/"
 
           if git diff --cached --quiet; then
