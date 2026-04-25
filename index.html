@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0d0d">
+<title>Now</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f5f2;
+    --surface: #ffffff;
+    --border: #ddddd8;
+    --accent: #2d7d46;
+    --accent-dim: rgba(45, 125, 70, 0.08);
+    --text: #1a1a1a;
+    --muted: #888;
+    --danger: #cc3333;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', monospace;
+    overscroll-behavior: none;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .wordmark {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .export-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .export-btn:active { color: var(--accent); border-color: var(--accent); }
+
+  .clear-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .clear-btn:active { color: var(--danger); border-color: var(--danger); }
+
+  /* ── INPUT ZONE ── */
+  .input-zone {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .input-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  #task-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 16px; /* prevents iOS zoom */
+    font-weight: 300;
+    padding: 12px 14px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+    min-height: 48px;
+    max-height: 120px;
+    line-height: 1.4;
+  }
+  #task-input::placeholder { color: var(--muted); }
+  #task-input:focus { border-color: var(--accent); }
+
+  #log-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-user-select: none;
+  }
+  #log-btn:active { opacity: 0.8; transform: scale(0.95); }
+
+  /* ── TIMELINE ── */
+  .timeline-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px 40px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    gap: 8px;
+  }
+  .empty-state .icon { font-size: 32px; opacity: 0.3; }
+  .empty-state p {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .entry {
+    display: flex;
+    gap: 14px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+    animation: slideIn 0.2s ease;
+    position: relative;
+  }
+  .entry:first-child { border-top: 1px solid var(--border); margin-top: 16px; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .entry-dot-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 3px;
+    flex-shrink: 0;
+    width: 12px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+  .dot-line {
+    width: 1px;
+    flex: 1;
+    background: var(--border);
+    margin-top: 4px;
+    min-height: 20px;
+  }
+
+  .entry-body { flex: 1; min-width: 0; }
+
+  .entry-time {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .entry-time .duration {
+    color: var(--accent);
+    margin-left: 8px;
+  }
+
+  .entry-text {
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  .reuse-btn, .delete-btn {
+    background: rgba(0, 0, 0, 0.06);
+    border: none;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 10px;
+    min-width: 44px;
+    flex-shrink: 0;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .reuse-btn:hover { background: rgba(0, 0, 0, 0.1); color: var(--text); }
+  .reuse-btn:active { background: var(--accent-dim); color: var(--accent); }
+  .delete-btn:hover { background: rgba(0, 0, 0, 0.1); color: var(--text); }
+  .delete-btn:active { background: rgba(204, 51, 51, 0.12); color: var(--danger); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--accent);
+    color: #fff;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    border-radius: 100px;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* scrollbar */
+  .timeline-wrap::-webkit-scrollbar { width: 3px; }
+  .timeline-wrap::-webkit-scrollbar-track { background: transparent; }
+  .timeline-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="wordmark">NOW</span>
+  <div class="header-right">
+    <button class="export-btn" onclick="exportCSV()">↓ CSV</button>
+    <button class="clear-btn" onclick="clearAll()">✕</button>
+  </div>
+</header>
+
+<div class="input-zone">
+  <div class="input-label">What are you switching to?</div>
+  <div class="input-row">
+    <textarea id="task-input" placeholder="e.g. reviewing PR for auth module…" rows="1" autocomplete="off" autocorrect="on" spellcheck="true"></textarea>
+    <button id="log-btn" onclick="logEntry()">↵</button>
+  </div>
+</div>
+
+<div class="timeline-wrap" id="timeline">
+  <div class="empty-state" id="empty">
+    <div class="icon">◎</div>
+    <p>No entries yet</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'now_entries';
+
+let entries = [];
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    entries = raw ? JSON.parse(raw) : [];
+  } catch(e) { entries = []; }
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2,'0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  return `${h % 12 || 12}:${m} ${ampm}`;
+}
+
+function formatDuration(ms) {
+  const totalMin = Math.round(ms / 60000);
+  if (totalMin < 1) return '<1m';
+  if (totalMin < 60) return `${totalMin}m`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatDateHeader(ts) {
+  return new Date(ts).toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+}
+
+function render() {
+  const wrap = document.getElementById('timeline');
+  const empty = document.getElementById('empty');
+
+  if (entries.length === 0) {
+    empty.style.display = 'flex';
+    // remove all entries
+    wrap.querySelectorAll('.entry, .date-header').forEach(el => el.remove());
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Build fresh — simple approach for POC
+  wrap.querySelectorAll('.entry, .date-header').forEach(el => el.remove());
+
+  // Newest first
+  const sorted = [...entries].sort((a,b) => b.ts - a.ts);
+  let lastDate = null;
+
+  sorted.forEach((entry, i) => {
+    const dateStr = formatDateHeader(entry.ts);
+
+    if (dateStr !== lastDate) {
+      const dh = document.createElement('div');
+      dh.className = 'date-header';
+      dh.style.cssText = `font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);padding:20px 0 4px;`;
+      dh.textContent = dateStr;
+      wrap.appendChild(dh);
+      lastDate = dateStr;
+    }
+
+    const newerEntry = i === 0 ? { ts: Date.now() } : sorted[i - 1];
+    const dur = newerEntry.ts - entry.ts;
+    const durationHtml = `<span class="duration">${formatDuration(dur)}</span>`;
+
+    const el = document.createElement('div');
+    el.className = 'entry';
+    el.dataset.id = entry.id;
+    el.innerHTML = `
+      <div class="entry-dot-col">
+        <div class="dot"></div>
+        <div class="dot-line"></div>
+      </div>
+      <div class="entry-body">
+        <div class="entry-time">${formatTime(entry.ts)}${durationHtml}</div>
+        <div class="entry-text">${escHtml(entry.text)}</div>
+      </div>
+      <button class="reuse-btn" onclick="reuseEntry('${entry.id}')" title="Fill in memo">⤴</button>
+      <button class="delete-btn" onclick="deleteEntry('${entry.id}')" title="Delete">×</button>
+    `;
+    wrap.appendChild(el);
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function logEntry() {
+  const input = document.getElementById('task-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const entry = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+    ts: Date.now(),
+    text
+  };
+  entries.push(entry);
+  save();
+
+  input.value = '';
+  input.style.height = 'auto';
+  render();
+  showToast('Logged');
+}
+
+function deleteEntry(id) {
+  entries = entries.filter(e => e.id !== id);
+  save();
+  render();
+}
+
+function reuseEntry(id) {
+  const entry = entries.find(e => e.id === id);
+  if (!entry) return;
+  const input = document.getElementById('task-input');
+  input.value = entry.text;
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  document.getElementById('timeline').scrollTop = 0;
+  input.focus();
+}
+
+function clearAll() {
+  if (entries.length === 0) return;
+  if (!confirm(`Clear all ${entries.length} entries?`)) return;
+  entries = [];
+  save();
+  render();
+}
+
+function exportCSV() {
+  if (entries.length === 0) { showToast('Nothing to export'); return; }
+  const sorted = [...entries].sort((a,b) => a.ts - b.ts);
+  const rows = [['timestamp_iso','timestamp_unix','description']];
+  sorted.forEach(e => {
+    const iso = new Date(e.ts).toISOString();
+    rows.push([iso, e.ts, `"${e.text.replace(/"/g,'""')}"`]);
+  });
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `now-${dateStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV exported');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// Auto-resize textarea
+const input = document.getElementById('task-input');
+input.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// Enter to submit (Shift+Enter for newline)
+input.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    logEntry();
+  }
+});
+
+// Init
+load();
+render();
+
+// Auto-focus on load (desktop); skip on mobile to avoid keyboard popup
+if (window.innerWidth > 600) {
+  input.focus();
+}
+</script>
+</body>
+</html>
