@@ -378,17 +378,9 @@ function render() {
       lastDate = dateStr;
     }
 
-    // Duration = time until next earlier entry (sorted[i-1] is more recent)
-    let durationHtml = '';
-    if (i < sorted.length - 1) {
-      const next = sorted[i + 1]; // older entry
-      // "how long was this task" = current.ts - older.ts... wait, sorted newest first
-      // entry at i started at entry.ts, previous task (i-1 in sorted) started before that
-      // duration of task at index i = sorted[i-1].ts - sorted[i].ts (how long until next task started)
-      const newerEntry = i === 0 ? { ts: Date.now() } : sorted[i - 1];
-      const dur = newerEntry.ts - entry.ts;
-      durationHtml = `<span class="duration">${formatDuration(dur)}</span>`;
-    }
+    const newerEntry = i === 0 ? { ts: Date.now() } : sorted[i - 1];
+    const dur = newerEntry.ts - entry.ts;
+    const durationHtml = `<span class="duration">${formatDuration(dur)}</span>`;
 
     const el = document.createElement('div');
     el.className = 'entry';
