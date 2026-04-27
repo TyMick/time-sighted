@@ -34,9 +34,16 @@ export function useEntries() {
     [entries, persist],
   );
 
+  const updateEntry = useCallback(
+    (id: string, updates: { text?: string; ts?: number }) => {
+      persist(entries.map((e) => (e.id === id ? { ...e, ...updates } : e)));
+    },
+    [entries, persist],
+  );
+
   const clearAll = useCallback(() => {
     persist([]);
   }, [persist]);
 
-  return { entries, loaded, addEntry, removeEntry, clearAll };
+  return { entries, loaded, addEntry, removeEntry, updateEntry, clearAll };
 }

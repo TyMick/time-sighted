@@ -1,16 +1,18 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
   Keyboard,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   useColorScheme,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -69,6 +71,225 @@ function buildListItems(entries: Entry[]): ListItem[] {
 }
 
 // ---------------------------------------------------------------------------
+// Edit form helpers
+// ---------------------------------------------------------------------------
+
+function formatEditDate(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatEditTime(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function parseEditDateTime(dateStr: string, timeStr: string): number | null {
+  const dm = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (!dm || !tm) return null;
+  const year = parseInt(dm[1], 10);
+  const month = parseInt(dm[2], 10);
+  const day = parseInt(dm[3], 10);
+  const hours = parseInt(tm[1], 10);
+  const minutes = parseInt(tm[2], 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (hours > 23 || minutes > 59) return null;
+  const d = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+// ---------------------------------------------------------------------------
+// Entry row
+// ---------------------------------------------------------------------------
+
+interface EntryRowProps {
+  entry: Entry;
+  duration: number;
+  colors: typeof lightColors;
+  onReuse: (text: string) => void;
+  onEdit: (entry: Entry) => void;
+  onDelete: (id: string) => void;
+  onMenuOpen: (id: string, pos: { top: number; right: number }) => void;
+}
+
+function EntryRow({ entry, duration, colors, onReuse, onEdit, onDelete, onMenuOpen }: EntryRowProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const isMobile = windowWidth < 768;
+  const kebabRef = useRef<View>(null);
+  const s = makeStyles(colors);
+
+  const handleKebabPress = () => {
+    kebabRef.current?.measure((_x: number, _y: number, w: number, h: number, pageX: number, pageY: number) => {
+      onMenuOpen(entry.id, {
+        top: pageY + h + 4,
+        right: windowWidth - pageX - w,
+      });
+    });
+  };
+
+  return (
+    <View style={s.entryRow}>
+      <View style={s.dotCol}>
+        <View style={s.dot} />
+        <View style={s.dotLine} />
+      </View>
+      <View style={s.entryBody}>
+        <View style={s.entryMeta}>
+          <Text style={s.entryTime}>{formatTime(entry.ts)}</Text>
+          <View style={s.badge}>
+            <Text style={s.badgeText}>{formatDuration(duration)}</Text>
+          </View>
+        </View>
+        <Text style={s.entryText}>{entry.text}</Text>
+      </View>
+      <View style={s.entryActions}>
+        <Pressable
+          onPress={() => onReuse(entry.text)}
+          style={({ pressed }) => [s.actionBtn, pressed && s.actionBtnPressed]}
+          accessibilityLabel="Reuse this entry"
+        >
+          <Text style={s.actionBtnText}>⤴</Text>
+        </Pressable>
+        {isMobile ? (
+          <Pressable
+            ref={kebabRef}
+            onPress={handleKebabPress}
+            style={({ pressed }) => [s.actionBtn, pressed && s.actionBtnPressed]}
+            accessibilityLabel="More options"
+          >
+            <Text style={s.actionBtnText}>⋮</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable
+              onPress={() => onEdit(entry)}
+              style={({ pressed }) => [s.actionBtn, pressed && s.actionBtnPressed]}
+              accessibilityLabel="Edit this entry"
+            >
+              <Text style={s.actionBtnText}>✏</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onDelete(entry.id)}
+              style={({ pressed }) => [s.actionBtn, s.deleteBtn, pressed && s.actionBtnPressed]}
+              accessibilityLabel="Delete this entry"
+            >
+              <Text style={[s.actionBtnText, s.deleteBtnText]}>×</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit entry modal
+// ---------------------------------------------------------------------------
+
+interface EditEntryModalProps {
+  entry: Entry | null;
+  colors: typeof lightColors;
+  onSave: (id: string, text: string, ts: number) => void;
+  onCancel: () => void;
+}
+
+function EditEntryModal({ entry, colors, onSave, onCancel }: EditEntryModalProps) {
+  const [text, setText] = useState('');
+  const [dateStr, setDateStr] = useState('');
+  const [timeStr, setTimeStr] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const s = makeStyles(colors);
+
+  useEffect(() => {
+    if (entry) {
+      setText(entry.text);
+      setDateStr(formatEditDate(entry.ts));
+      setTimeStr(formatEditTime(entry.ts));
+      setError(null);
+    }
+  }, [entry]);
+
+  const handleSave = () => {
+    if (!entry) return;
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setError("Memo can't be empty");
+      return;
+    }
+    const ts = parseEditDateTime(dateStr, timeStr);
+    if (ts === null) {
+      setError('Invalid date or time — use YYYY-MM-DD and HH:MM');
+      return;
+    }
+    setError(null);
+    onSave(entry.id, trimmed, ts);
+  };
+
+  return (
+    <Modal visible={entry !== null} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={s.modalOverlay}>
+        <View style={s.modalDialog}>
+          <Text style={s.modalTitle}>Edit entry</Text>
+
+          <Text style={s.fieldLabel}>Memo</Text>
+          <TextInput
+            style={[s.fieldInput, s.memoInput]}
+            value={text}
+            onChangeText={setText}
+            multiline
+            placeholder="What were you doing?"
+            placeholderTextColor={colors.muted}
+          />
+
+          <View style={s.fieldRow}>
+            <View style={s.halfField}>
+              <Text style={s.fieldLabel}>Date</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={dateStr}
+                onChangeText={setDateStr}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.muted}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+            <View style={s.halfField}>
+              <Text style={s.fieldLabel}>Time</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={timeStr}
+                onChangeText={setTimeStr}
+                placeholder="HH:MM"
+                placeholderTextColor={colors.muted}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+          </View>
+
+          {error ? <Text style={s.fieldError}>{error}</Text> : null}
+
+          <View style={s.modalButtons}>
+            <Pressable
+              onPress={onCancel}
+              style={({ pressed }) => [s.modalCancelBtn, pressed && s.modalBtnPressed]}
+            >
+              <Text style={s.modalCancelBtnText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSave}
+              style={({ pressed }) => [s.modalSaveBtn, pressed && s.modalBtnPressed]}
+            >
+              <Text style={s.modalSaveBtnText}>Save</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 
@@ -78,8 +299,11 @@ export default function Index() {
   const insets = useSafeAreaInsets();
   const s = makeStyles(colors);
 
-  const { entries, loaded, addEntry, removeEntry, clearAll } = useEntries();
+  const { entries, loaded, addEntry, removeEntry, updateEntry, clearAll } = useEntries();
   const [inputText, setInputText] = useState('');
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const toast = useToast();
   const inputRef = useRef<TextInput>(null);
 
@@ -141,6 +365,41 @@ export default function Index() {
     toast.show('CSV exported');
   };
 
+  const handleMenuOpen = (id: string, pos: { top: number; right: number }) => {
+    setOpenMenuId(id);
+    setMenuPos(pos);
+  };
+
+  const handleMenuClose = () => {
+    setOpenMenuId(null);
+    setMenuPos(null);
+  };
+
+  const handleMenuEdit = () => {
+    const entry = entries.find((e) => e.id === openMenuId);
+    if (entry) {
+      Keyboard.dismiss();
+      setEditingEntry(entry);
+    }
+    handleMenuClose();
+  };
+
+  const handleMenuDelete = () => {
+    if (openMenuId) removeEntry(openMenuId);
+    handleMenuClose();
+  };
+
+  const handleDirectEdit = (entry: Entry) => {
+    Keyboard.dismiss();
+    setEditingEntry(entry);
+  };
+
+  const handleSaveEdit = (id: string, text: string, ts: number) => {
+    updateEntry(id, { text, ts });
+    setEditingEntry(null);
+    toast.show('Saved');
+  };
+
   const listItems = loaded ? buildListItems(entries) : [];
 
   const renderItem = ({ item }: { item: ListItem }) => {
@@ -149,37 +408,15 @@ export default function Index() {
     }
     const { entry, duration } = item;
     return (
-      <View style={s.entryRow}>
-        <View style={s.dotCol}>
-          <View style={s.dot} />
-          <View style={s.dotLine} />
-        </View>
-        <View style={s.entryBody}>
-          <View style={s.entryMeta}>
-            <Text style={s.entryTime}>{formatTime(entry.ts)}</Text>
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{formatDuration(duration)}</Text>
-            </View>
-          </View>
-          <Text style={s.entryText}>{entry.text}</Text>
-        </View>
-        <View style={s.entryActions}>
-          <Pressable
-            onPress={() => handleReuse(entry.text)}
-            style={({ pressed }) => [s.actionBtn, pressed && s.actionBtnPressed]}
-            accessibilityLabel="Reuse this entry"
-          >
-            <Text style={s.actionBtnText}>⤴</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => removeEntry(entry.id)}
-            style={({ pressed }) => [s.actionBtn, s.deleteBtn, pressed && s.actionBtnPressed]}
-            accessibilityLabel="Delete this entry"
-          >
-            <Text style={[s.actionBtnText, s.deleteBtnText]}>×</Text>
-          </Pressable>
-        </View>
-      </View>
+      <EntryRow
+        entry={entry}
+        duration={duration}
+        colors={colors}
+        onReuse={handleReuse}
+        onEdit={handleDirectEdit}
+        onDelete={removeEntry}
+        onMenuOpen={handleMenuOpen}
+      />
     );
   };
 
@@ -248,6 +485,36 @@ export default function Index() {
           <Text style={s.toastText}>{toast.message}</Text>
         </View>
       )}
+
+      {/* Kebab menu overlay */}
+      {openMenuId && menuPos && (
+        <Modal transparent animationType="none" onRequestClose={handleMenuClose}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={handleMenuClose} />
+          <View style={[s.kebabMenu, { top: menuPos.top, right: menuPos.right }]}>
+            <Pressable
+              onPress={handleMenuEdit}
+              style={({ pressed }) => [s.menuItem, pressed && s.menuItemPressed]}
+            >
+              <Text style={s.menuItemText}>Edit</Text>
+            </Pressable>
+            <View style={s.menuDivider} />
+            <Pressable
+              onPress={handleMenuDelete}
+              style={({ pressed }) => [s.menuItem, pressed && s.menuItemPressed]}
+            >
+              <Text style={[s.menuItemText, s.menuItemDestructive]}>Delete</Text>
+            </Pressable>
+          </View>
+        </Modal>
+      )}
+
+      {/* Edit modal */}
+      <EditEntryModal
+        entry={editingEntry}
+        colors={colors}
+        onSave={handleSaveEdit}
+        onCancel={() => setEditingEntry(null)}
+      />
     </View>
   );
 }
@@ -476,6 +743,132 @@ function makeStyles(colors: typeof lightColors) {
       fontFamily: 'IBMPlexSans_400Regular',
       fontSize: fontSize.sm,
       color: colors.background,
+    },
+
+    // Kebab dropdown menu
+    kebabMenu: {
+      position: 'absolute',
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      minWidth: 120,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 8,
+      overflow: 'hidden',
+    },
+    menuItem: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+    },
+    menuItemPressed: {
+      backgroundColor: colors.buttonHover,
+    },
+    menuItemText: {
+      fontFamily: 'IBMPlexSans_400Regular',
+      fontSize: fontSize.md,
+      color: colors.text,
+    },
+    menuItemDestructive: {
+      color: colors.danger,
+    },
+    menuDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+    },
+
+    // Edit entry modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    modalDialog: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: spacing.lg,
+      width: '100%',
+      maxWidth: 480,
+    },
+    modalTitle: {
+      fontFamily: 'IBMPlexMono_500Medium',
+      fontSize: fontSize.lg,
+      color: colors.text,
+      marginBottom: spacing.lg,
+    },
+    fieldLabel: {
+      fontFamily: 'IBMPlexMono_400Regular',
+      fontSize: fontSize.xs,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: colors.muted,
+      marginBottom: spacing.xs,
+    },
+    fieldInput: {
+      fontFamily: 'IBMPlexSans_400Regular',
+      fontSize: fontSize.md,
+      color: colors.text,
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    memoInput: {
+      minHeight: 72,
+      maxHeight: 120,
+      textAlignVertical: 'top',
+    },
+    fieldRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    halfField: {
+      flex: 1,
+    },
+    fieldError: {
+      fontFamily: 'IBMPlexSans_400Regular',
+      fontSize: fontSize.sm,
+      color: colors.danger,
+      marginBottom: spacing.md,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      justifyContent: 'flex-end',
+      marginTop: spacing.xs,
+    },
+    modalCancelBtn: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: 6,
+      backgroundColor: colors.buttonBg,
+    },
+    modalCancelBtnText: {
+      fontFamily: 'IBMPlexMono_400Regular',
+      fontSize: fontSize.sm,
+      color: colors.muted,
+    },
+    modalSaveBtn: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: 6,
+      backgroundColor: colors.accent,
+    },
+    modalSaveBtnText: {
+      fontFamily: 'IBMPlexMono_400Regular',
+      fontSize: fontSize.sm,
+      color: '#ffffff',
+    },
+    modalBtnPressed: {
+      opacity: 0.8,
     },
   });
 }
