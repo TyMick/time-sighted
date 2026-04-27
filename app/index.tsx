@@ -316,7 +316,7 @@ function makeStyles(colors: typeof lightColors) {
     textInput: {
       flex: 1,
       fontFamily: 'IBMPlexSans_400Regular',
-      fontSize: fontSize.md,
+      fontSize: Platform.OS === 'web' ? 16 : fontSize.md,
       color: colors.text,
       backgroundColor: colors.inputBg,
       borderWidth: 1,
