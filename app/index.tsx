@@ -213,8 +213,6 @@ export default function Index() {
           onChangeText={setInputText}
           placeholder="What are you switching to?"
           placeholderTextColor={colors.muted}
-          multiline
-          blurOnSubmit={false}
           onSubmitEditing={handleSubmit}
           returnKeyType="send"
           autoFocus={Platform.OS === 'web'}
