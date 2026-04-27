@@ -1,3 +1,12 @@
 # Populated at Claude session start via the SessionStart hook in .claude/settings.json
 .agents/skills/
 .claude/skills/
+
+# Expo / React Native
+node_modules/
+.expo/
+dist/
+web-build/
+
+# OS
+.DS_Store

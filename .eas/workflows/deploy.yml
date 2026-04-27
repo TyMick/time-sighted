@@ -1,0 +1,12 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy_web:
+    type: deploy
+    params:
+      prod: true
