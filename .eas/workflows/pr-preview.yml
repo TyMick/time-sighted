@@ -9,3 +9,7 @@ jobs:
     type: deploy
     params:
       prod: false
+
+  comment:
+    needs: [preview]
+    type: github-comment
