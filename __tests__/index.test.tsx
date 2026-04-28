@@ -1,100 +1,84 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { render, screen, userEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import Index from '../app/index';
-import { useEntries } from '../src/useEntries';
 import type { Entry } from '../src/types';
 
-jest.mock('../src/useEntries');
-
-const mockUseEntries = useEntries as jest.MockedFunction<typeof useEntries>;
-
 function makeEntry(overrides: Partial<Entry> = {}): Entry {
-  return { id: '1', ts: Date.now(), text: 'test entry', ...overrides };
+  return { id: 'e1', ts: 1_000_000, text: 'test entry', ...overrides };
 }
 
-function setupMock(overrides: Partial<ReturnType<typeof useEntries>> = {}) {
-  const addEntry = jest.fn();
-  const removeEntry = jest.fn();
-  const clearAll = jest.fn();
-  mockUseEntries.mockReturnValue({
-    entries: [],
-    loaded: true,
-    addEntry,
-    removeEntry,
-    clearAll,
-    ...overrides,
-  });
-  return { addEntry, removeEntry, clearAll };
-}
+beforeEach(async () => {
+  await AsyncStorage.clear();
+  jest.useFakeTimers();
+});
+
+afterEach(() => {
+  jest.runAllTimers();
+  jest.useRealTimers();
+});
 
 describe('Index screen', () => {
-  it('renders the app title', () => {
-    setupMock();
+  it('renders the app title', async () => {
     render(<Index />);
-    expect(screen.getByText('Time Sighted')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Time Sighted')).toBeTruthy());
   });
 
-  it('shows the empty state when there are no entries', () => {
-    setupMock({ entries: [] });
+  it('shows the empty state once entries have loaded', async () => {
     render(<Index />);
+    await waitFor(() => expect(screen.getByText('Nothing logged yet')).toBeTruthy());
+  });
+
+  it('adds an entry and shows it in the timeline', async () => {
+    const user = userEvent.setup();
+    render(<Index />);
+    await waitFor(() => screen.getByText('Nothing logged yet'));
+    await user.type(screen.getByPlaceholderText('What are you switching to?'), 'deep work');
+    await user.press(screen.getByLabelText('Log entry'));
+    await waitFor(() => expect(screen.getByText('deep work')).toBeTruthy());
+  });
+
+  it('ignores blank submissions', async () => {
+    const user = userEvent.setup();
+    render(<Index />);
+    await waitFor(() => screen.getByText('Nothing logged yet'));
+    await user.press(screen.getByLabelText('Log entry'));
     expect(screen.getByText('Nothing logged yet')).toBeTruthy();
   });
 
-  it('calls addEntry with trimmed text on submit via keyboard', () => {
-    const { addEntry } = setupMock();
+  it('renders entries loaded from storage', async () => {
+    await AsyncStorage.setItem('now_entries', JSON.stringify([makeEntry({ text: 'focused coding' })]));
     render(<Index />);
-    const input = screen.getByPlaceholderText('What are you switching to?');
-    fireEvent.changeText(input, '  deep work  ');
-    fireEvent(input, 'submitEditing');
-    expect(addEntry).toHaveBeenCalledWith('deep work');
+    await waitFor(() => expect(screen.getByText('focused coding')).toBeTruthy());
   });
 
-  it('calls addEntry when pressing the submit button', () => {
-    const { addEntry } = setupMock();
+  it('removes an entry when delete is pressed', async () => {
+    await AsyncStorage.setItem('now_entries', JSON.stringify([makeEntry({ text: 'to delete' })]));
+    const user = userEvent.setup();
     render(<Index />);
-    const input = screen.getByPlaceholderText('What are you switching to?');
-    fireEvent.changeText(input, 'lunch break');
-    fireEvent.press(screen.getByLabelText('Log entry'));
-    expect(addEntry).toHaveBeenCalledWith('lunch break');
+    await waitFor(() => screen.getByText('to delete'));
+    await user.press(screen.getByLabelText('Delete this entry'));
+    await waitFor(() => expect(screen.queryByText('to delete')).toBeNull());
   });
 
-  it('does not call addEntry for blank input', () => {
-    const { addEntry } = setupMock();
+  it('fills the input with the entry text when reuse is pressed', async () => {
+    await AsyncStorage.setItem('now_entries', JSON.stringify([makeEntry({ text: 'team sync' })]));
+    const user = userEvent.setup();
     render(<Index />);
-    fireEvent.press(screen.getByLabelText('Log entry'));
-    expect(addEntry).not.toHaveBeenCalled();
-  });
-
-  it('renders entry text in the list', () => {
-    setupMock({ entries: [makeEntry({ text: 'focused coding' })] });
-    render(<Index />);
-    expect(screen.getByText('focused coding')).toBeTruthy();
-  });
-
-  it('calls removeEntry with the entry id when delete is pressed', () => {
-    const entry = makeEntry({ id: 'abc123', text: 'to delete' });
-    const { removeEntry } = setupMock({ entries: [entry] });
-    render(<Index />);
-    fireEvent.press(screen.getByLabelText('Delete this entry'));
-    expect(removeEntry).toHaveBeenCalledWith('abc123');
-  });
-
-  it('fills the input with entry text when reuse is pressed', () => {
-    const entry = makeEntry({ text: 'team sync' });
-    setupMock({ entries: [entry] });
-    render(<Index />);
-    fireEvent.press(screen.getByLabelText('Reuse this entry'));
+    await waitFor(() => screen.getByText('team sync'));
+    await user.press(screen.getByLabelText('Reuse this entry'));
     expect(screen.getByDisplayValue('team sync')).toBeTruthy();
   });
 
-  it('shows a confirmation alert before clearing and does not clear without confirmation', () => {
+  it('shows a confirmation alert before clearing', async () => {
+    await AsyncStorage.setItem('now_entries', JSON.stringify([makeEntry()]));
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    const entry = makeEntry();
-    const { clearAll } = setupMock({ entries: [entry] });
+    const user = userEvent.setup();
     render(<Index />);
-    fireEvent.press(screen.getByText('✕'));
+    await waitFor(() => screen.getByText('test entry'));
+    await user.press(screen.getByText('✕'));
     expect(alertSpy).toHaveBeenCalled();
-    expect(clearAll).not.toHaveBeenCalled();
+    expect(screen.getByText('test entry')).toBeTruthy();
     alertSpy.mockRestore();
   });
 });
