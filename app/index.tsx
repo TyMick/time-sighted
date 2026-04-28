@@ -99,6 +99,13 @@ export default function Index() {
 
   const handleClearAll = () => {
     if (entries.length === 0) return;
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete all ${entries.length} entries? This cannot be undone.`)) {
+        clearAll();
+        toast.show('Cleared');
+      }
+      return;
+    }
     Alert.alert(
       'Clear all entries',
       `Delete all ${entries.length} entries? This cannot be undone.`,
